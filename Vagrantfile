@@ -22,5 +22,6 @@ Vagrant.configure("2") do |config|
   config.vm.provision "optionsdir", type: "file", source: "work/options", destination: "/tmp/options"
   config.vm.provision "portsfile", type: "file", source: "work/ports.list", destination: "/tmp/ports.list"
   config.vm.provision "installonly", type: "shell", path: "build.sh", args: "installonly"
+  config.vm.provision "repokey", type: "file", source: "work/repo.key", destination: "/tmp/repo.key"
   config.vm.provision "builder", type: "shell", path: "build.sh", args: "poudriere"
 end
