@@ -11,6 +11,15 @@ Launch a FreeBSD vagrant VM, install Poudriere, then build packages of the ports
 ./build.sh
 ```
 
+## Requirements
+
+* Vagrant
+* VirtualBox
+* OpenSSL (or compatible CLI replacement)
+* curl
+
 ## Caveats
 
-This system does not check if the ports you specify exist. Make sure the ports you enter during the configure stage are typed in properly.
+Most of the interesting options are set as variables at the top of [build.sh](build.sh). In the future, it'd be nice to make these passable on the command line, or retrievable from a config file.
+
+The amount of RAM given to the VM is hard-coded inside of [Vagrantfile](Vagrantfile).
