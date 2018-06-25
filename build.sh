@@ -1,6 +1,6 @@
 #!/bin/sh
 
-JAILNAME=vpb
+JAILNAME=vppb
 FBSDTARGET=11.1-RELEASE
 FBSDARCH=amd64
 PORTSMETHOD=portsnap
@@ -44,7 +44,9 @@ if [ "$1" = "" ]; then
     mkdir ${ARTIFACTS}
   fi
 
-  scp -F $SSHCONFIG "poudriere:/usr/local/poudriere/data/packages/${JAILNAME}-default/All/*" ${ARTIFACTS}/ &>/dev/null
+  # Copy packages using tar to easily preserve symlinks
+  # Try to work around ssh instability with the cipher/mac settings
+  ssh -m hmac-sha1 -c aes128-cbc -F $SSHCONFIG poudriere "tar -C /usr/local/poudriere/data/packages -cf - ." | tar -C ${ARTIFACTS} -xf -
   if [ $? != 0 ]; then
     echo 'Copying artifacts failed!'
     exit 1
@@ -69,6 +71,32 @@ elif [ "$1" = "configure" ]; then
     echo $line >> ${WORK}/ports.list
   done
 
+  for port in `cat ${WORK}/ports.list`;
+  do
+    curl --output /dev/null --silent --head --fail https://raw.githubusercontent.com/freebsd/freebsd-ports/master/${port}/Makefile
+    if [ $? != 0 ]; then
+      echo "Cannot find port $port"
+      exit 1
+    fi
+  done
+
+  if [ ! -e ${WORK}/repo.key ]; then
+    echo "Can't find a signing key. Enter a path to a private key, or press enter to generate one."
+    read line
+    if [ -z "$line" ]; then
+      openssl genrsa -out ${WORK}/repo.key 2048
+      chmod 0400 ${WORK}/repo.key
+      openssl rsa -in ${WORK}/repo.key -out ${WORK}/repo.pub -pubout
+    else
+      if [ ! -e $line ]; then
+        echo "Can't find private key file: $line"
+        exit 1
+      fi
+
+      ln -s $line ${WORK}/repo.key
+    fi
+  fi
+
   vagrant up --provision-with portsfile,installonly
   if [ $? != 0 ]; then
     echo 'Configuration failed!'
@@ -87,6 +115,7 @@ elif [ "$1" = "configure" ]; then
 
   echo "==> Configuration done. Ready to run $0."
 
+# Only install poudriere and set up files for running 'options'
 elif [ "$1" = "installonly" ]; then
   env ASSUME_ALWAYS_YES=YES pkg install ports-mgmt/poudriere
   poudriere ports -c -m $PORTSMETHOD
@@ -98,6 +127,7 @@ elif [ "$1" = "poudriere" ]; then
   mkdir -p /usr/ports/distfiles
   poudriere jail -c -j $JAILNAME -v $FBSDTARGET -a $FBSDARCH
   echo "WITH_PKGNG=yes" >> /usr/local/etc/poudriere.d/make.conf
+  echo "PKG_REPO_SIGNING_KEY=/tmp/repo.key" >> /usr/local/etc/poudriere.conf
   mv /tmp/options /usr/local/etc/poudriere.d/
   poudriere bulk -j $JAILNAME -f /usr/local/etc/poudriere.d/ports.list
 
